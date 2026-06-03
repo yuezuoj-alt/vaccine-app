@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <link rel="stylesheet" href="css/status-bar.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>接种时间表</title>
+  <style>
+    :root {
+      --bg-page: #fefefe;
+      --pink-accent: #ec7b75;
+      --pink-muted: #e8c0b7;
+      --pink-muted-alt: #e8bfb7;
+      --pink-nav: #fee0d8;
+      --text-dark: #3c3c3c;
+      --grid-line: #d5cbbf;
+      --age-col-bg: rgba(244, 241, 236, 0.6);
+      --vax-col-band-bg: rgba(244, 241, 236, 0.6);
+      --row-highlight-age: #ffe9e9;
+      --row-highlight-vax: #fff0f0;
+      --pill-w: 114px;
+      --pill-h: 42px;
+      --pill-radius: 15px;
+      --age-col-w: 80px;
+      --phone-w: 440px;
+      --phone-h: 956px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e8e4e2;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      padding: 24px 12px;
+    }
+
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      max-width: 100%;
+      max-height: calc(100vh - 48px);
+      background: var(--bg-page);
+      border-radius: 48px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar .levels .wifi { width: 17.14px; height: 12.33px; }
+    .profile-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 20px 6px;
+      flex-shrink: 0;
+    }
+
+    .table-header {
+      display: grid;
+      grid-template-columns: var(--age-col-w) 1fr;
+      height: 38px;
+      align-items: flex-end;
+      padding: 0 0 8px;
+      border-bottom: 1px solid var(--grid-line);
+      flex-shrink: 0;
+      background: #fff;
+    }
+
+    .table-header .age-label {
+      font-size: 16px;
+      line-height: 22px;
+      color: var(--text-dark);
+      padding-left: 22px;
+    }
+
+    .table-header .vax-label {
+      font-size: 16px;
+      line-height: 22px;
+      color: var(--text-dark);
+      padding-left: 149px;
+    }
+
+    .table-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 118px;
+      position: relative;
+    }
+
+    .table-scroll::-webkit-scrollbar { display: none; }
+
+    .vax-col-band {
+      position: absolute;
+      left: 200px;
+      top: 0;
+      bottom: 0;
+      width: 120px;
+      background: var(--vax-col-band-bg);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .schedule-table-wrap {
+      position: relative;
+      min-height: 100%;
+    }
+
+    .schedule-rows {
+      position: relative;
+      z-index: 1;
+    }
+
+    .schedule-row {
+      display: grid;
+      grid-template-columns: var(--age-col-w) 1fr;
+      border-bottom: 1px solid var(--grid-line);
+    }
+
+    .schedule-row.highlight .age-cell {
+      background: var(--row-highlight-age);
+    }
+
+    .schedule-row.highlight .vax-grid {
+      background: var(--row-highlight-vax);
+    }
+
+    .age-cell {
+      background: var(--age-col-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      font-size: 14px;
+      color: var(--text-dark);
+      text-align: center;
+      line-height: 20px;
+    }
+
+    .vax-grid {
+      display: grid;
+      grid-template-columns: var(--pill-w) var(--pill-w) var(--pill-w);
+      column-gap: 6px;
+      row-gap: 0;
+      padding: 0 7px 0 3px;
+      grid-auto-rows: var(--pill-h);
+      align-content: start;
+    }
+
+    .vax-pill {
+      width: var(--pill-w);
+      height: var(--pill-h);
+      border-radius: var(--pill-radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--text-dark);
+      text-align: center;
+      padding: 0 8px;
+      line-height: 1.2;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    .vax-pill.done::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      top: 50%;
+      height: 2px;
+      background: #fff;
+      transform: translateY(-50%);
+      border-radius: 1px;
+      pointer-events: none;
+    }
+
+    .vax-pill.dashed {
+      background: #fff;
+      border: 2px dashed #ccc;
+    }
+
+    .vax-pill.pink { background: #ffb7b2; }
+    .vax-pill.yellow { background: #f8e9a1; }
+    .vax-pill.mint { background: #b5ead7; }
+    .vax-pill.peach { background: #fbe7c6; }
+    .vax-pill.light-pink { background: #fde2e4; }
+    .vax-pill.cyan { background: #d4f0f0; }
+    .vax-pill.blue { background: #a0e7e5; }
+    .vax-pill.purple { background: #dcd6f7; }
+    .vax-pill.light-green { background: #e2f0cb; }
+
+    .list-fade {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 102px;
+      height: 55px;
+      background: linear-gradient(180deg, rgba(241, 241, 241, 0) 29.861%, rgba(149, 149, 149, 0.1) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 102px;
+      background: var(--pink-nav);
+      backdrop-filter: blur(11.45px);
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 30px 34px;
+      z-index: 10;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 50px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .nav-item .nav-icon {
+      width: 42px;
+      height: 42px;
+      margin-bottom: 4px;
+    }
+
+    .nav-item .nav-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+    .nav-item .nav-label {
+      font-size: 10px;
+      color: var(--pink-muted);
+      white-space: nowrap;
+      line-height: normal;
+    }
+
+    .nav-item[data-nav="appointment"] .nav-label {
+      color: var(--pink-muted-alt);
+    }
+
+    .nav-item.active .nav-label { color: var(--pink-accent); }
+
+    @media (max-width: 480px) {
+      body { padding: 0; }
+      .phone {
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+  <script src="js/load-baby-profile-css.js"></script>
+</head>
+<body>
+  <div class="phone">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <div class="dynamic-island" aria-hidden="true"></div>
+      <div class="levels">
+        <img class="cellular" src="https://www.figma.com/api/mcp/asset/2b3e8c2c-aaa2-42ee-882e-106343ef1bce" alt="" />
+        <img class="wifi" src="https://www.figma.com/api/mcp/asset/a4efd718-b3a5-42d0-befd-a698bbbe2bc5" alt="" />
+        <img class="battery" src="https://www.figma.com/api/mcp/asset/5409e771-2a9a-4f0a-b287-c510a6b7e049" alt="" />
+      </div>
+    </div>
+
+    <div class="profile-row" id="profileSwitcher"></div>
+
+    <div class="table-header">
+      <span class="age-label">年龄</span>
+      <span class="vax-label">疫苗种类</span>
+    </div>
+
+    <div class="table-scroll">
+      <div class="schedule-table-wrap">
+        <div class="vax-col-band" aria-hidden="true"></div>
+        <div class="schedule-rows" id="scheduleBody"></div>
+      </div>
+    </div>
+    <div class="list-fade"></div>
+
+    <nav class="bottom-nav" aria-label="主导航">
+      <button class="nav-item" data-nav="appointment" type="button">
+        <span class="nav-icon"><img src="https://www.figma.com/api/mcp/asset/f528b54e-3585-47ae-a496-65f65bdda2d0" alt="" /></span>
+        <span class="nav-label">预约</span>
+      </button>
+      <button class="nav-item active" data-nav="schedule" type="button">
+        <span class="nav-icon"><img src="https://www.figma.com/api/mcp/asset/6bdbec6c-c39b-4240-b92b-83b74ecb03ee" alt="" /></span>
+        <span class="nav-label">接种时间表</span>
+      </button>
+      <button class="nav-item" data-nav="growth" type="button">
+        <span class="nav-icon"><img src="https://www.figma.com/api/mcp/asset/b35165e6-ad9c-492f-844b-b9429abff561" alt="" /></span>
+        <span class="nav-label">成长曲线</span>
+      </button>
+      <button class="nav-item" data-nav="profile" type="button">
+        <span class="nav-icon"><img src="https://www.figma.com/api/mcp/asset/85da77f1-c6d8-4198-901b-cf01f75f15bf" alt="" /></span>
+        <span class="nav-label">我的</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="js/system-time.js"></script>
+  <script src="js/baby-profile.js"></script>
+  <script src="js/vaccine-detail.js"></script>
+  <script>
+    const scheduleData = [
+      {
+        age: "24小时内",
+        height: 42,
+        vaccines: [
+          { name: "乙肝疫苗1/3", color: "pink", col: 0 },
+          { name: "卡介疫苗", color: "yellow", col: 1 }
+        ]
+      },
+      {
+        age: "1月龄",
+        height: 42,
+        vaccines: [{ name: "乙肝疫苗2/3", color: "pink", col: 0 }]
+      },
+      {
+        age: "2月龄",
+        height: 84,
+        vaccines: [
+          { name: "脊灰疫苗1/4", color: "mint", col: 0, row: 0 },
+          { name: "百白破1/4", color: "peach", col: 1, row: 0 },
+          { name: "五联疫苗1/4", dashed: true, col: 0, row: 1 },
+          { name: "五价轮状1/3", dashed: true, col: 1, row: 1 },
+          { name: "13价肺炎1/4", dashed: true, col: 2, row: 1 }
+        ]
+      },
+      {
+        age: "3月龄",
+        height: 84,
+        vaccines: [
+          { name: "脊灰疫苗2/4", color: "mint", col: 0, row: 0 },
+          { name: "五联疫苗2/4", dashed: true, col: 0, row: 1 },
+          { name: "五价轮状2/3", dashed: true, col: 1, row: 1 }
+        ]
+      },
+      {
+        age: "4月龄",
+        height: 84,
+        vaccines: [
+          { name: "脊灰疫苗3/4", color: "mint", col: 0, row: 0 },
+          { name: "百白破2/4", color: "peach", col: 1, row: 0 },
+          { name: "五联疫苗3/4", dashed: true, col: 0, row: 1 },
+          { name: "五价轮状1/3", dashed: true, col: 1, row: 1 },
+          { name: "13价肺炎2/4", dashed: true, col: 2, row: 1 }
+        ]
+      },
+      {
+        age: "6月龄",
+        height: 84,
+        vaccines: [
+          { name: "乙肝疫苗3/3", color: "pink", col: 0, row: 0 },
+          { name: "百白破3/4", color: "peach", col: 1, row: 0 },
+          { name: "A群流脑1/2", color: "light-pink", col: 2, row: 0 },
+          { name: "A+C结合流脑1/2", dashed: true, col: 0, row: 1 },
+          { name: "手足口1/2", dashed: true, col: 1, row: 1 },
+          { name: "13价肺炎3/4", dashed: true, col: 2, row: 1 }
+        ]
+      },
+      {
+        age: "7月龄",
+        height: 42,
+        vaccines: [{ name: "手足口1/2", dashed: true, col: 1, row: 0 }]
+      },
+      {
+        age: "8月龄",
+        height: 42,
+        vaccines: [
+          { name: "麻腮风1/2", color: "cyan", col: 0, row: 0 },
+          { name: "乙脑减毒1/2", color: "light-green", col: 1, row: 0 }
+        ]
+      },
+      {
+        age: "9月龄",
+        height: 84,
+        vaccines: [
+          { name: "A群流脑2/2", color: "light-pink", col: 2, row: 0 },
+          { name: "A+C结合流脑1/2", dashed: true, col: 0, row: 1 }
+        ]
+      },
+      {
+        age: "12月龄",
+        height: 42,
+        vaccines: [
+          { name: "水痘疫苗1/2", dashed: true, col: 1, row: 0 },
+          { name: "13价肺炎4/4", dashed: true, col: 2, row: 0 }
+        ]
+      },
+      {
+        age: "18月龄",
+        height: 84,
+        vaccines: [
+          { name: "麻腮风2/2", color: "cyan", col: 0, row: 0 },
+          { name: "百白破4/4", color: "peach", col: 1, row: 0 },
+          { name: "甲肝灭活1/2", color: "blue", col: 2, row: 0 },
+          { name: "五联疫苗4/4", dashed: true, col: 0, row: 1 },
+          { name: "甲肝减毒", dashed: true, col: 2, row: 1 }
+        ]
+      },
+      {
+        age: "2岁",
+        height: 42,
+        vaccines: [
+          { name: "乙脑减毒2/2", color: "light-green", col: 1, row: 0 },
+          { name: "甲肝灭活2/2", color: "blue", col: 2, row: 0 }
+        ]
+      },
+      {
+        age: "3岁",
+        height: 84,
+        vaccines: [
+          { name: "AC流脑多糖1/2", color: "purple", col: 0, row: 0 },
+          { name: "ACYW135多糖1/2", dashed: true, col: 0, row: 1 }
+        ]
+      },
+      {
+        age: "4岁",
+        height: 84,
+        vaccines: [
+          { name: "脊灰疫苗4/4", color: "mint", col: 0, row: 0 },
+          { name: "水痘疫苗2/2", dashed: true, col: 1, row: 1 }
+        ]
+      },
+      {
+        age: "6岁",
+        height: 85,
+        vaccines: [
+          { name: "AC流脑多糖2/2", color: "purple", col: 0, row: 0 },
+          { name: "白破疫苗", color: "peach", col: 1, row: 0 },
+          { name: "ACYW135多糖2/2", dashed: true, col: 0, row: 1 }
+        ]
+      }
+    ];
+
+    const NAV_ROUTES = {
+      appointment: "疫苗首页.html",
+      schedule: "接种时间表.html",
+      growth: "成长曲线.html",
+      profile: "我的.html"
+    };
+
+    function renderPill(v) {
+      const classes = ["vax-pill"];
+      if (v.dashed) classes.push("dashed");
+      else classes.push(v.color || "peach");
+      if (v.done) classes.push("done");
+
+      const styles = [];
+      if (v.col != null) styles.push(`grid-column:${v.col + 1}`);
+      if (v.row != null) styles.push(`grid-row:${v.row + 1}`);
+      const styleAttr = styles.length ? ` style="${styles.join(";")}"` : "";
+
+      return `<div class="${classes.join(" ")}"${styleAttr} data-vaccine="${v.name}" role="button" tabindex="0">${v.name}</div>`;
+    }
+
+    function initPillClicks() {
+      document.querySelectorAll(".vax-pill").forEach(function (pill) {
+        function handleClick() {
+          const name = pill.dataset.vaccine || "";
+          window.location.href = VaccineDetail.buildDetailUrl(name, "接种时间表.html");
+        }
+        pill.addEventListener("click", handleClick);
+        pill.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        });
+      });
+    }
+
+    function renderSchedule() {
+      const highlightAge = BabyProfile.getScheduleHighlightAge(
+        scheduleData,
+        SystemTime.getNow()
+      );
+      const body = document.getElementById("scheduleBody");
+      body.innerHTML = scheduleData.map((row) => `
+        <div class="schedule-row${row.age === highlightAge ? " highlight" : ""}" style="min-height:${row.height}px">
+          <div class="age-cell">${row.age}</div>
+          <div class="vax-grid">
+            ${row.vaccines.map(renderPill).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function initNav() {
+      document.querySelectorAll(".nav-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          const id = item.dataset.nav;
+          if (NAV_ROUTES[id] && id !== "schedule") {
+            window.location.href = NAV_ROUTES[id];
+          }
+        });
+      });
+    }
+
+    renderSchedule();
+    BabyProfile.mountSwitcher("#profileSwitcher");
+    BabyProfile.subscribe(function (event) {
+      if (event.type === "child") {
+        renderSchedule();
+        initPillClicks();
+      }
+    });
+    initNav();
+    initPillClicks();
+  </script>
+</body>
+</html>
